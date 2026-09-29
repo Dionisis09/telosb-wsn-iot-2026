@@ -32,7 +32,31 @@
     td { font-variant-numeric: tabular-nums; }
     .note { margin-top: 14px; color: #607780; font-size: 12px; }
     .warning { background: #fff0cc; border: 1px solid #d9971f; color: #633b00; padding: 12px 16px; border-radius: 9px; margin-bottom: 18px; }
+    .forecast-section { margin-top: 24px; padding: 22px; background: linear-gradient(140deg, #eaf3f4, #f8fafb 66%); border: 1px solid #d0e1e4; border-radius: 16px; }
+    .forecast-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .forecast-head h2 { margin: 0 0 5px; font-size: 22px; }
+    .forecast-head p { margin: 0; color: #536b73; font-size: 13px; }
+    .forecast-badge { display: inline-block; padding: 7px 11px; background: #d9e9ec; color: #174553; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .forecast-summary { margin: 16px 0; color: #3b5962; font-size: 13px; }
+    .forecast-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .forecast-card { padding: 17px; background: white; border: 1px solid #d8e5e8; border-radius: 12px; }
+    .forecast-card.linear { border-top: 4px solid #db714a; }
+    .forecast-card.arima { border-top: 4px solid #7767b5; }
+    .forecast-card h3 { margin: 0 0 6px; font-size: 16px; }
+    .forecast-card p { min-height: 36px; margin: 0 0 12px; color: #607780; font-size: 12px; }
+    .metric-row { display: flex; gap: 24px; }
+    .metric-row span { display: block; color: #637a82; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+    .metric-row strong { display: block; margin-top: 3px; font-size: 21px; font-variant-numeric: tabular-nums; }
+    .forecast-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .forecast-charts .panel { min-width: 0; }
+    .forecast-charts h3 { margin: 0 0 10px; font-size: 15px; }
+    .legend { display: flex; gap: 16px; color: #506771; font-size: 12px; margin-top: 8px; }
+    .legend i { display: inline-block; width: 18px; border-top: 3px solid #244f5c; vertical-align: middle; margin-right: 5px; }
+    .legend .predicted-linear { border-color: #db714a; }
+    .legend .predicted-arima { border-color: #7767b5; }
+    .forecast-note { color: #536b73; font-size: 12px; line-height: 1.5; margin: 15px 0 0; }
     @media (max-width: 760px) { .cards { grid-template-columns: 1fr 1fr; } .charts { grid-template-columns: 1fr; } #status { margin-left: 0; width: 100%; } }
+    @media (max-width: 760px) { .forecast-cards, .forecast-charts { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -54,6 +78,22 @@
     <section class="charts">
       <div class="panel"><h2>Θερμοκρασία °C</h2><canvas id="temp-chart"></canvas></div>
       <div class="panel"><h2>Υγρασία %RH</h2><canvas id="humidity-chart"></canvas></div>
+    </section>
+    <section class="forecast-section" aria-labelledby="forecast-title">
+      <div class="forecast-head">
+        <div><h2 id="forecast-title">Προβλέψεις θερμοκρασίας</h2><p>Αξιολόγηση μοντέλων στον επιλεγμένο κόμβο · μετρημένη τιμή και πρόβλεψη</p></div>
+        <span class="forecast-badge" id="forecast-badge">Φόρτωση αποτελεσμάτων</span>
+      </div>
+      <p class="forecast-summary" id="forecast-summary">Ανάκτηση αποτελεσμάτων...</p>
+      <div class="forecast-cards">
+        <div class="forecast-card linear"><h3>Linear Regression</h3><p>Επόμενη τιμή από τις πρόσφατες γνωστές μετρήσεις.</p><div class="metric-row"><div><span>MAE</span><strong id="linear-mae">—</strong></div><div><span>RMSE</span><strong id="linear-rmse">—</strong></div></div></div>
+        <div class="forecast-card arima"><h3>ARIMA (1,0,0)</h3><p>Πρόβλεψη ολόκληρης της περιόδου ελέγχου χωρίς νέες μετρήσεις.</p><div class="metric-row"><div><span>MAE</span><strong id="arima-mae">—</strong></div><div><span>RMSE</span><strong id="arima-rmse">—</strong></div></div></div>
+      </div>
+      <div class="forecast-charts">
+        <div class="panel"><h3>Linear Regression · ένα βήμα</h3><canvas id="linear-chart" aria-label="Μετρημένη και προβλεπόμενη θερμοκρασία Linear Regression"></canvas><div class="legend"><span><i></i>Μέτρηση</span><span><i class="predicted-linear"></i>Πρόβλεψη</span></div></div>
+        <div class="panel"><h3>ARIMA · περίοδος ελέγχου</h3><canvas id="arima-chart" aria-label="Μετρημένη και προβλεπόμενη θερμοκρασία ARIMA"></canvas><div class="legend"><span><i></i>Μέτρηση</span><span><i class="predicted-arima"></i>Πρόβλεψη</span></div></div>
+      </div>
+      <p class="forecast-note">Τα γραφήματα δείχνουν αποθηκευμένη ιστορική αξιολόγηση με χρονολογικό διαχωρισμό 80% εκπαίδευση / 20% έλεγχο. Δεν είναι ζωντανές προβλέψεις των επόμενων 20 s. Οι δύο μέθοδοι έχουν διαφορετικό ορίζοντα πρόβλεψης, οπότε τα σφάλματά τους δεν αποτελούν άμεση σύγκριση ποιότητας.</p>
     </section>
     <section class="panel table-panel"><h2>Πρόσφατες μετρήσεις</h2><table><thead><tr><th>Ώρα</th><th>Count</th><th>°C</th><th>%RH</th><th>Photo</th><th>Solar</th></tr></thead><tbody id="rows"></tbody></table></section>
     <p class="note">Οι τιμές θερμοκρασίας και υγρασίας προκύπτουν από τις ακατέργαστες μετρήσεις SHT11 με υπόθεση τροφοδοσίας 3 V. Ο χρόνος είναι ο χρόνος λήψης στον υπολογιστή.</p>
@@ -103,6 +143,69 @@
       ctx.fillText(endText, w - right - ctx.measureText(endText).width, h - 7);
     }
 
+    function forecastChart(id, model, predictionColor) {
+      const canvas = document.getElementById(id);
+      const rect = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      canvas.height = Math.floor(260 * ratio);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(ratio, ratio);
+      const w = rect.width, h = 260, left = 44, right = 13, top = 16, bottom = 38;
+      const points = model && model.points ? model.points : [];
+      if (!points.length) { ctx.fillStyle = '#617780'; ctx.fillText('Δεν υπάρχουν προβλέψεις.', left, h / 2); return; }
+      const values = points.flatMap(point => [point.actual, point.predicted]);
+      let min = Math.min(...values), max = Math.max(...values);
+      const pad = Math.max((max - min) * 0.12, 0.25);
+      min -= pad; max += pad;
+      const start = Date.parse(points[0].timestamp), end = Date.parse(points[points.length - 1].timestamp);
+      const x = point => left + (Date.parse(point.timestamp) - start) / Math.max(1, end - start) * (w - left - right);
+      const y = value => top + (max - value) / (max - min) * (h - top - bottom);
+      ctx.font = '11px system-ui';
+      for (let i = 0; i <= 4; i++) {
+        const yy = top + i * (h - top - bottom) / 4;
+        ctx.strokeStyle = '#e4ecee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(w - right, yy); ctx.stroke();
+        ctx.fillStyle = '#667b82'; ctx.fillText((max - i * (max - min) / 4).toFixed(1), 2, yy + 4);
+      }
+      for (const [field, color] of [['actual', '#244f5c'], ['predicted', predictionColor]]) {
+        ctx.strokeStyle = color; ctx.lineWidth = field === 'actual' ? 2 : 2.4;
+        ctx.beginPath();
+        points.forEach((point, i) => { if (i) ctx.lineTo(x(point), y(point[field])); else ctx.moveTo(x(point), y(point[field])); });
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#667b82';
+      const label = ms => new Date(ms).toLocaleString('el-GR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+      ctx.fillText(label(start), left, h - 7);
+      const endText = label(end);
+      ctx.fillText(endText, w - right - ctx.measureText(endText).width, h - 7);
+    }
+
+    async function refreshForecast() {
+      const badge = document.getElementById('forecast-badge');
+      const summary = document.getElementById('forecast-summary');
+      if (!source.value) { summary.textContent = 'Αναμονή μετρήσεων.'; return; }
+      try {
+        const response = await fetch(`/api/forecasts?dataset=${dataset.value}&source_id=${source.value}`);
+        if (!response.ok) throw new Error('Δεν υπάρχει αποθηκευμένη αξιολόγηση για αυτόν τον κόμβο.');
+        const result = await response.json();
+        const item = result.source;
+        badge.textContent = result.data_origin === 'synthetic' ? 'Συνθετικό σενάριο' : 'Πραγματικό στιγμιότυπο';
+        summary.textContent = `TelosB ${item.source_id} · ${item.sample_count.toLocaleString('el-GR')} μετρήσεις · ${time(item.first_timestamp)} – ${time(item.last_timestamp)} · στόχος: θερμοκρασία °C`;
+        for (const [id, model] of [['linear', item.linear_regression], ['arima', item.arima]]) {
+          document.getElementById(`${id}-mae`).textContent = `${model.mae.toFixed(3)} °C`;
+          document.getElementById(`${id}-rmse`).textContent = `${model.rmse.toFixed(3)} °C`;
+        }
+        forecastChart('linear-chart', item.linear_regression, '#db714a');
+        forecastChart('arima-chart', item.arima, '#7767b5');
+      } catch (error) {
+        badge.textContent = 'Μη διαθέσιμο';
+        summary.textContent = error.message;
+        forecastChart('linear-chart', null, '#db714a');
+        forecastChart('arima-chart', null, '#7767b5');
+      }
+    }
+
     async function refresh() {
       try {
         document.getElementById('synthetic-warning').hidden = dataset.value !== 'synthetic';
@@ -120,6 +223,7 @@
         const rows = await (await fetch(url)).json();
         chart('temp-chart', rows, 'temperature_c', '#d7633c');
         chart('humidity-chart', rows, 'humidity_pct', '#248b9b');
+        await refreshForecast();
         document.getElementById('rows').innerHTML = rows.slice(-20).reverse().map(row =>
           `<tr><td>${time(row.timestamp)}</td><td>${row.count}</td><td>${fmt(row.temperature_c, '')}</td><td>${fmt(row.humidity_pct, '')}</td><td>${row.photo_raw ?? '—'}</td><td>${row.solar_raw ?? '—'}</td></tr>`
         ).join('');

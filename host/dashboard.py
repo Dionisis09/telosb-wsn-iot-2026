@@ -41,6 +41,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 class Handler(BaseHTTPRequestHandler):
     collections = None
     html = None
+    forecasts = None
 
     def send_content(self, status, content, content_type):
         self.send_response(status)
@@ -66,6 +67,24 @@ class Handler(BaseHTTPRequestHandler):
             self.send_content(400, b"Invalid dataset", "text/plain")
             return
         collection = self.collections[dataset]
+
+        if parsed.path == "/api/forecasts":
+            try:
+                source_id = str(int(query["source_id"][0]))
+            except (KeyError, ValueError, IndexError):
+                self.send_content(400, b"Invalid source", "text/plain")
+                return
+            snapshot = self.forecasts.get("datasets", {}).get(dataset, {})
+            prediction = snapshot.get("sources", {}).get(source_id)
+            if prediction is None:
+                self.send_content(404, b"No forecast snapshot", "text/plain")
+                return
+            self.send_json({
+                "data_origin": snapshot["data_origin"],
+                "dataset_sample_count": snapshot["sample_count"],
+                "source": prediction,
+            })
+            return
 
         if parsed.path == "/api/latest":
             result = []
@@ -121,6 +140,12 @@ def main():
     }
     with open(os.path.join(os.path.dirname(__file__), "dashboard.html"), "rb") as source:
         Handler.html = source.read()
+    forecast_path = os.path.join(os.path.dirname(__file__), "dashboard_forecasts.json")
+    try:
+        with open(forecast_path, "r", encoding="utf-8") as source:
+            Handler.forecasts = json.load(source)
+    except FileNotFoundError:
+        Handler.forecasts = {}
 
     server = ThreadedHTTPServer((args.bind, args.port), Handler)
     print("Dashboard listening on {}:{}".format(args.bind, args.port), flush=True)
