@@ -38,6 +38,10 @@
     .forecast-head p { margin: 0; color: #536b73; font-size: 13px; }
     .forecast-badge { display: inline-block; padding: 7px 11px; background: #d9e9ec; color: #174553; border-radius: 999px; font-size: 12px; font-weight: 700; }
     .forecast-summary { margin: 16px 0; color: #3b5962; font-size: 13px; }
+    .live-forecast { margin-top: 16px; padding: 16px 18px; background: #e6f4ed; border: 1px solid #9ac9b0; border-radius: 12px; }
+    .live-forecast h3 { margin: 0 0 6px; font-size: 15px; }
+    .live-forecast strong { display: block; color: #176042; font-size: 28px; font-variant-numeric: tabular-nums; }
+    .live-forecast p { margin: 6px 0 0; color: #3f6254; font-size: 12px; }
     .forecast-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .forecast-card { padding: 17px; background: white; border: 1px solid #d8e5e8; border-radius: 12px; }
     .forecast-card.linear { border-top: 4px solid #db714a; }
@@ -84,6 +88,11 @@
         <div><h2 id="forecast-title">Προβλέψεις θερμοκρασίας</h2><p>Αξιολόγηση μοντέλων στον επιλεγμένο κόμβο · μετρημένη τιμή και πρόβλεψη</p></div>
         <span class="forecast-badge" id="forecast-badge">Φόρτωση αποτελεσμάτων</span>
       </div>
+      <div class="live-forecast" id="live-forecast">
+        <h3>Επόμενη μέτρηση · πραγματικός κόμβος</h3>
+        <strong id="live-forecast-value">Αναμονή...</strong>
+        <p id="live-forecast-detail">Η πρόβλεψη ενημερώνεται όταν φτάνει νέα πραγματική μέτρηση.</p>
+      </div>
       <p class="forecast-summary" id="forecast-summary">Ανάκτηση αποτελεσμάτων...</p>
       <div class="forecast-cards">
         <div class="forecast-card linear"><h3>Linear Regression</h3><p>Επόμενη τιμή από τις πρόσφατες γνωστές μετρήσεις.</p><div class="metric-row"><div><span>MAE</span><strong id="linear-mae">—</strong></div><div><span>RMSE</span><strong id="linear-rmse">—</strong></div></div></div>
@@ -93,7 +102,7 @@
         <div class="panel"><h3>Linear Regression · ένα βήμα</h3><canvas id="linear-chart" aria-label="Μετρημένη και προβλεπόμενη θερμοκρασία Linear Regression"></canvas><div class="legend"><span><i></i>Μέτρηση</span><span><i class="predicted-linear"></i>Πρόβλεψη</span></div></div>
         <div class="panel"><h3>ARIMA · περίοδος ελέγχου</h3><canvas id="arima-chart" aria-label="Μετρημένη και προβλεπόμενη θερμοκρασία ARIMA"></canvas><div class="legend"><span><i></i>Μέτρηση</span><span><i class="predicted-arima"></i>Πρόβλεψη</span></div></div>
       </div>
-      <p class="forecast-note">Τα γραφήματα δείχνουν αποθηκευμένη ιστορική αξιολόγηση με χρονολογικό διαχωρισμό 80% εκπαίδευση / 20% έλεγχο. Δεν είναι ζωντανές προβλέψεις των επόμενων 20 s. Οι δύο μέθοδοι έχουν διαφορετικό ορίζοντα πρόβλεψης, οπότε τα σφάλματά τους δεν αποτελούν άμεση σύγκριση ποιότητας.</p>
+      <p class="forecast-note">Η πράσινη κάρτα χρησιμοποιεί τις τρεις τελευταίες πραγματικές θερμοκρασίες για νέα πρόβλεψη του επόμενου βήματος. Οι συντελεστές του μοντέλου εκπαιδεύτηκαν σε αποθηκευμένο πραγματικό στιγμιότυπο και δεν επανεκπαιδεύονται αυτόματα. Τα δύο γραφήματα παρακάτω δείχνουν αποθηκευμένη ιστορική αξιολόγηση με χρονολογικό διαχωρισμό 80% εκπαίδευση / 20% έλεγχο. Οι δύο μέθοδοι έχουν διαφορετικό ορίζοντα πρόβλεψης, οπότε τα σφάλματά τους δεν αποτελούν άμεση σύγκριση ποιότητας.</p>
     </section>
     <section class="panel table-panel"><h2>Πρόσφατες μετρήσεις</h2><table><thead><tr><th>Ώρα</th><th>Count</th><th>°C</th><th>%RH</th><th>Photo</th><th>Solar</th></tr></thead><tbody id="rows"></tbody></table></section>
     <p class="note">Οι τιμές θερμοκρασίας και υγρασίας προκύπτουν από τις ακατέργαστες μετρήσεις SHT11 με υπόθεση τροφοδοσίας 3 V. Ο χρόνος είναι ο χρόνος λήψης στον υπολογιστή.</p>
@@ -184,6 +193,21 @@
     async function refreshForecast() {
       const badge = document.getElementById('forecast-badge');
       const summary = document.getElementById('forecast-summary');
+      const live = document.getElementById('live-forecast');
+      live.hidden = dataset.value !== 'real';
+      if (!live.hidden && source.value) {
+        try {
+          const response = await fetch(`/api/live-forecast?dataset=real&source_id=${source.value}`);
+          if (!response.ok) throw new Error('Περιμένουμε τρεις πρόσφατες πραγματικές λήψεις.');
+          const forecast = await response.json();
+          document.getElementById('live-forecast-value').textContent = `${forecast.predicted_temperature_c.toFixed(2)} °C`;
+          document.getElementById('live-forecast-detail').textContent =
+            `Για περίπου ${time(forecast.predicted_timestamp)} · τελευταία μέτρηση ${forecast.latest_measurement.toFixed(2)} °C στις ${time(forecast.latest_timestamp)} · μοντέλο εκπαιδευμένο έως ${time(forecast.model_trained_until)}.`;
+        } catch (error) {
+          document.getElementById('live-forecast-value').textContent = '—';
+          document.getElementById('live-forecast-detail').textContent = error.message;
+        }
+      }
       if (!source.value) { summary.textContent = 'Αναμονή μετρήσεων.'; return; }
       try {
         const response = await fetch(`/api/forecasts?dataset=${dataset.value}&source_id=${source.value}`);

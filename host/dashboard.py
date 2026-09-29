@@ -68,6 +68,53 @@ class Handler(BaseHTTPRequestHandler):
             return
         collection = self.collections[dataset]
 
+        if parsed.path == "/api/live-forecast":
+            if dataset != "real":
+                self.send_content(400, b"Live forecast requires real data", "text/plain")
+                return
+            try:
+                source_id = int(query["source_id"][0])
+            except (KeyError, ValueError, IndexError):
+                self.send_content(400, b"Invalid source", "text/plain")
+                return
+            snapshot = self.forecasts.get("datasets", {}).get("real", {})
+            model = snapshot.get("sources", {}).get(str(source_id), {}).get("live_linear_model")
+            if not model:
+                self.send_content(404, b"No trained real-data model", "text/plain")
+                return
+            rows = list(collection.find({
+                "source_id": source_id,
+                "temperature_c": {"$ne": None},
+            }).sort("timestamp", -1).limit(3))
+            if len(rows) != 3:
+                self.send_content(404, b"Not enough real measurements", "text/plain")
+                return
+            latest_time = rows[0]["timestamp"]
+            age_seconds = (datetime.utcnow() - latest_time).total_seconds()
+            gaps = [(rows[i]["timestamp"] - rows[i + 1]["timestamp"]).total_seconds()
+                    for i in range(2)]
+            if age_seconds > 90 or any(gap <= 0 or gap > 60 for gap in gaps):
+                self.send_content(404, b"Recent measurements are stale or interrupted", "text/plain")
+                return
+            inputs = [float(row["temperature_c"]) for row in rows]
+            estimate = model["intercept"] + sum(
+                coefficient * value
+                for coefficient, value in zip(model["coefficients"], inputs)
+            )
+            self.send_json({
+                "data_origin": "real",
+                "source_id": source_id,
+                "latest_measurement": round(inputs[0], 4),
+                "latest_timestamp": latest_time.replace(tzinfo=timezone.utc).isoformat(),
+                "predicted_timestamp": (latest_time + timedelta(seconds=20)).replace(
+                    tzinfo=timezone.utc).isoformat(),
+                "predicted_temperature_c": round(estimate, 4),
+                "model": "Linear Regression",
+                "model_trained_until": model["trained_until"],
+                "model_training_points": model["trained_on_points"],
+            })
+            return
+
         if parsed.path == "/api/forecasts":
             try:
                 source_id = str(int(query["source_id"][0]))

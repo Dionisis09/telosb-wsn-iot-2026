@@ -62,6 +62,9 @@ def evaluate_source(mote):
     columns = ["current", "lag_1", "lag_2"]
     linear = LinearRegression().fit(train[columns], train["next_value"])
     linear_pred = linear.predict(test[columns])
+    # Historical scores use only the first 80% for training. For live inference,
+    # fit the same features on the complete available snapshot after evaluation.
+    live_linear = LinearRegression().fit(features[columns], features["next_value"])
     # A feature row at t predicts the next regularized reading at t + 20s.
     linear_times = test.index + pd.Timedelta(seconds=20)
 
@@ -76,6 +79,13 @@ def evaluate_source(mote):
         "first_timestamp": mote["timestamp"].min().isoformat(),
         "last_timestamp": mote["timestamp"].max().isoformat(),
         "target": "temperature_c",
+        "live_linear_model": {
+            "features": columns,
+            "intercept": float(live_linear.intercept_),
+            "coefficients": [float(value) for value in live_linear.coef_],
+            "trained_on_points": int(len(features)),
+            "trained_until": features.index[-1].isoformat(),
+        },
         "linear_regression": model_result(
             linear_times, test["next_value"].to_numpy(), linear_pred,
             "Διαδοχική πρόβλεψη ενός βήματος με πρόσφατες γνωστές τιμές",
